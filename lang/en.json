@@ -16,6 +16,8 @@
   "deploy-party.SETTINGS.defaultTokenImage.hint": "Artwork used for newly created party markers. Pick any image from your file system or a compendium pack.",
   "deploy-party.hud.deploy": "Deploy party",
   "deploy-party.hud.recall": "Recall party",
+  "deploy-party.recall.confirmTitle": "Recall Party",
+  "deploy-party.recall.confirmBody": "Recall {count} token(s)? They will be deleted from the scene — any HP, conditions, or other changes tracked on an unlinked token will be lost.",
   "deploy-party.notifications.gmOnly": "Only the GM can do that.",
   "deploy-party.notifications.folderMissing": "The source folder for \"{name}\" no longer exists.",
   "deploy-party.notifications.folderEmpty": "The folder \"{name}\" has no actors to deploy.",

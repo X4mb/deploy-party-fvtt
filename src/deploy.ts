@@ -4,6 +4,11 @@ import { collectActorsInFolder, spawnActorsAround } from './spawn.js';
 import { AFTER_DEPLOY_BEHAVIORS, getAfterDeployBehavior, getIncludeSubfolders, loc } from './settings.js';
 
 export async function deployParty(tokenDoc: TokenDocument): Promise<void> {
+  if (!game.user?.isGM) {
+    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, 'Only the GM can do that.'));
+    return;
+  }
+
   const folderUuid = flags(tokenDoc).getFlag(MODULE_ID, FLAGS.FOLDER_UUID) as string | undefined;
   const folder = folderUuid ? ((await fromUuid(folderUuid)) as Folder | null) : null;
 
@@ -40,7 +45,6 @@ export async function deployParty(tokenDoc: TokenDocument): Promise<void> {
   };
   const batchId = foundry.utils.randomID();
 
-  await flags(tokenDoc).setFlag(MODULE_ID, FLAGS.LAST_DEPLOY_BATCH_ID, batchId);
   await spawnActorsAround(scene, actors, center, {
     hidden: tokenDoc.hidden,
     extraFlags: () => ({
@@ -59,7 +63,11 @@ export async function deployParty(tokenDoc: TokenDocument): Promise<void> {
   );
 }
 
-/** Skips the marker entirely: drops every actor in `folder` straight onto the scene at `point`. */
+/**
+ * Skips the marker entirely: drops every actor in `folder` straight onto the scene at `point`.
+ * Tokens are still tagged with a batch id and the source folder, so Recall works on them too
+ * (rebuilding a marker on demand since none exists here).
+ */
 export async function deployFolderDirectly(
   folder: Folder,
   point: { x: number; y: number },
@@ -83,7 +91,15 @@ export async function deployFolderDirectly(
     return;
   }
 
-  await spawnActorsAround(scene, actors, point);
+  const batchId = foundry.utils.randomID();
+
+  await spawnActorsAround(scene, actors, point, {
+    extraFlags: () => ({
+      [FLAGS.DEPLOY_BATCH_ID]: batchId,
+      [FLAGS.ORIGIN_FOLDER_UUID]: folder.uuid,
+      [FLAGS.ORIGIN_FOLDER_NAME]: folder.name,
+    }),
+  });
 
   ui.notifications?.info(
     loc(`${MODULE_ID}.notifications.deployed`, 'Deployed {count} token(s) from "{name}".')

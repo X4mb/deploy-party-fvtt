@@ -5,8 +5,6 @@ var FLAGS = {
   IS_PARTY_TOKEN: "isPartyToken",
   FOLDER_UUID: "folderUuid",
   FOLDER_NAME: "folderName",
-  /** The batch id of the marker's most recent deploy, so Recall knows which tokens are still "out". */
-  LAST_DEPLOY_BATCH_ID: "lastDeployBatchId",
   // Set on each token spawned by a deploy, so it can find its way back.
   DEPLOY_BATCH_ID: "deployBatchId",
   ORIGIN_MARKER_ID: "originMarkerId",
@@ -203,6 +201,10 @@ async function spawnActorsAround(scene, actors, center, options = {}) {
 
 // src/deploy.ts
 async function deployParty(tokenDoc) {
+  if (!game.user?.isGM) {
+    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can do that."));
+    return;
+  }
   const folderUuid = flags(tokenDoc).getFlag(MODULE_ID, FLAGS.FOLDER_UUID);
   const folder = folderUuid ? await fromUuid(folderUuid) : null;
   if (!(folder instanceof Folder)) {
@@ -234,7 +236,6 @@ async function deployParty(tokenDoc) {
     y: tokenDoc.y + tokenDoc.height * gridSize / 2
   };
   const batchId = foundry.utils.randomID();
-  await flags(tokenDoc).setFlag(MODULE_ID, FLAGS.LAST_DEPLOY_BATCH_ID, batchId);
   await spawnActorsAround(scene, actors, center, {
     hidden: tokenDoc.hidden,
     extraFlags: () => ({
@@ -265,7 +266,14 @@ async function deployFolderDirectly(folder, point, scene = canvas?.scene ?? null
     );
     return;
   }
-  await spawnActorsAround(scene, actors, point);
+  const batchId = foundry.utils.randomID();
+  await spawnActorsAround(scene, actors, point, {
+    extraFlags: () => ({
+      [FLAGS.DEPLOY_BATCH_ID]: batchId,
+      [FLAGS.ORIGIN_FOLDER_UUID]: folder.uuid,
+      [FLAGS.ORIGIN_FOLDER_NAME]: folder.name
+    })
+  });
   ui.notifications?.info(
     loc(`${MODULE_ID}.notifications.deployed`, 'Deployed {count} token(s) from "{name}".').replace("{count}", String(actors.length)).replace("{name}", folder.name)
   );
@@ -337,19 +345,45 @@ function isPartyMarker(tokenDoc) {
 function isDeployedMember(tokenDoc) {
   return Boolean(flags(tokenDoc).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID));
 }
+function findDeployedMembers(tokenDoc, scene) {
+  if (isPartyMarker(tokenDoc)) {
+    return sceneTokens(scene).tokens.contents.filter(
+      (t) => flags(t).getFlag(MODULE_ID, FLAGS.ORIGIN_MARKER_ID) === tokenDoc.id
+    );
+  }
+  const batchId = flags(tokenDoc).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID);
+  if (!batchId) return [];
+  return sceneTokens(scene).tokens.contents.filter(
+    (t) => flags(t).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID) === batchId
+  );
+}
+async function confirmRecall(count) {
+  const result = await foundry.applications.api.DialogV2.confirm({
+    window: { title: loc(`${MODULE_ID}.recall.confirmTitle`, "Recall Party") },
+    content: `<p>${loc(
+      `${MODULE_ID}.recall.confirmBody`,
+      "Recall {count} token(s)? They will be deleted from the scene \u2014 any HP, conditions, or other changes tracked on an unlinked token will be lost."
+    ).replace("{count}", String(count))}</p>`,
+    rejectClose: false,
+    modal: true
+  });
+  return result === true;
+}
 async function recallParty(tokenDoc) {
+  if (!game.user?.isGM) {
+    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can do that."));
+    return;
+  }
   const scene = tokenDoc.parent;
   if (!scene) return;
-  const batchId = isPartyMarker(tokenDoc) ? flags(tokenDoc).getFlag(MODULE_ID, FLAGS.LAST_DEPLOY_BATCH_ID) : flags(tokenDoc).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID);
-  const members = batchId ? sceneTokens(scene).tokens.contents.filter(
-    (t) => flags(t).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID) === batchId
-  ) : [];
+  const members = findDeployedMembers(tokenDoc, scene);
   if (!members.length) {
     ui.notifications?.warn(
       loc(`${MODULE_ID}.notifications.nothingToRecall`, "Nothing from this party is currently deployed.")
     );
     return;
   }
+  if (!await confirmRecall(members.length)) return;
   const grid = scene.grid;
   const gridSize = grid.size;
   let sumX = 0;

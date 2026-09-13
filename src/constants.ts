@@ -6,8 +6,6 @@ export const FLAGS = {
   IS_PARTY_TOKEN: 'isPartyToken',
   FOLDER_UUID: 'folderUuid',
   FOLDER_NAME: 'folderName',
-  /** The batch id of the marker's most recent deploy, so Recall knows which tokens are still "out". */
-  LAST_DEPLOY_BATCH_ID: 'lastDeployBatchId',
 
   // Set on each token spawned by a deploy, so it can find its way back.
   DEPLOY_BATCH_ID: 'deployBatchId',

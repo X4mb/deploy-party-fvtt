@@ -12,32 +12,60 @@ export function isDeployedMember(tokenDoc: TokenDocument): boolean {
 }
 
 /**
- * Undoes a deploy: deletes every token spawned in the same batch as `tokenDoc` (which may be
- * the party marker itself, or one of the deployed members) and brings the marker back —
- * reusing it in place if it's still on the scene, otherwise recreating one from the source folder.
+ * Finds the tokens a recall should act on. From the marker, that's every token still linked
+ * to it (across all its deploys, not just the latest); from a deployed member, it's just the
+ * siblings from that one deploy.
+ */
+function findDeployedMembers(tokenDoc: TokenDocument, scene: Scene): TokenDocument[] {
+  if (isPartyMarker(tokenDoc)) {
+    return sceneTokens(scene).tokens.contents.filter(
+      (t) => flags(t).getFlag(MODULE_ID, FLAGS.ORIGIN_MARKER_ID) === tokenDoc.id,
+    );
+  }
+
+  const batchId = flags(tokenDoc).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID) as string | undefined;
+  if (!batchId) return [];
+  return sceneTokens(scene).tokens.contents.filter(
+    (t) => flags(t).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID) === batchId,
+  );
+}
+
+async function confirmRecall(count: number): Promise<boolean> {
+  const result = await foundry.applications.api.DialogV2.confirm({
+    window: { title: loc(`${MODULE_ID}.recall.confirmTitle`, 'Recall Party') },
+    content: `<p>${loc(
+      `${MODULE_ID}.recall.confirmBody`,
+      'Recall {count} token(s)? They will be deleted from the scene — any HP, conditions, or other changes tracked on an unlinked token will be lost.',
+    ).replace('{count}', String(count))}</p>`,
+    rejectClose: false,
+    modal: true,
+  });
+  return result === true;
+}
+
+/**
+ * Undoes a deploy: deletes the deployed tokens linked to `tokenDoc` (which may be the party
+ * marker itself, or one of the deployed members) and brings the marker back — reusing it in
+ * place if it's still on the scene, otherwise recreating one from the source folder.
  */
 export async function recallParty(tokenDoc: TokenDocument): Promise<void> {
+  if (!game.user?.isGM) {
+    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, 'Only the GM can do that.'));
+    return;
+  }
+
   const scene = tokenDoc.parent as Scene | null;
   if (!scene) return;
 
-  const batchId = (
-    isPartyMarker(tokenDoc)
-      ? flags(tokenDoc).getFlag(MODULE_ID, FLAGS.LAST_DEPLOY_BATCH_ID)
-      : flags(tokenDoc).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID)
-  ) as string | undefined;
-
-  const members = batchId
-    ? sceneTokens(scene).tokens.contents.filter(
-        (t) => flags(t).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID) === batchId,
-      )
-    : [];
-
+  const members = findDeployedMembers(tokenDoc, scene);
   if (!members.length) {
     ui.notifications?.warn(
       loc(`${MODULE_ID}.notifications.nothingToRecall`, 'Nothing from this party is currently deployed.'),
     );
     return;
   }
+
+  if (!(await confirmRecall(members.length))) return;
 
   const grid = scene.grid as unknown as { size: number };
   const gridSize = grid.size;

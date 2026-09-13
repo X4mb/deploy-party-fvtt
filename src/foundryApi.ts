@@ -37,3 +37,12 @@ export type FoldersOf = {
 export function foldersOf(folder: unknown): FoldersOf {
   return folder as unknown as FoldersOf;
 }
+
+export type SceneTokens = {
+  tokens: { contents: TokenDocument[]; get(id: string): TokenDocument | undefined };
+  deleteEmbeddedDocuments(embeddedName: 'Token', ids: string[]): Promise<unknown[]>;
+};
+
+export function sceneTokens(scene: unknown): SceneTokens {
+  return scene as unknown as SceneTokens;
+}

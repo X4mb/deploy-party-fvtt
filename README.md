@@ -12,6 +12,7 @@ Deploy Party turns any folder in your **Actors** directory into a single, quick-
 2. A single marker token appears where you dropped it, standing in for the whole folder.
 3. **Right-click** the marker to open Foundry's normal Token HUD, then click the **Deploy** icon.
 4. Every actor in that folder is placed onto the scene as its own token, arranged in a neat grid around the marker.
+5. Done with that room or encounter? **Right-click any deployed token** (or the marker, if it's still around) and click **Recall** to delete the deployed tokens and bring the marker back — reusing the original marker if it's still on the scene, or rebuilding one from the source folder if it isn't.
 
 No system-specific code — it uses each actor's own prototype token, so vision, disposition, and size all come out the way that actor is already configured.
 
@@ -23,8 +24,9 @@ No system-specific code — it uses each actor's own prototype token, so vision,
 | --- | --- |
 | **Create a marker** | Drag any Actor folder from the sidebar onto the canvas. |
 | **Deploy it** | Right-click the marker → click the people-group icon in the Token HUD. |
+| **Recall it** | Right-click the marker or any one of its deployed tokens → click the people-arrows icon. All tokens from that deploy are removed and the marker reappears at their center. |
 | **Subfolders** | Included by default — turn this off in settings if you only want the folder's direct contents. |
-| **After deploying** | The marker can stay, hide, or delete itself — configurable in settings (default: hidden, so you can move it and deploy again later). |
+| **After deploying** | The marker can stay, hide, or delete itself — configurable in settings (default: hidden, so you can move it and deploy again later, or recall straight back into it). |
 
 ---
 
@@ -50,6 +52,9 @@ await api.createPartyTokenFromFolder(folder, { x, y });
 
 // Deploy an existing marker's folder onto the scene
 await api.deployParty(tokenDocument);
+
+// Recall a deploy back into its marker (pass the marker or any deployed member)
+await api.recallParty(tokenDocument);
 ```
 
 ---

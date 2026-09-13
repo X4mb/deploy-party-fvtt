@@ -2,6 +2,7 @@ import { registerCanvasDrop } from './canvasDrop.js';
 import { MODULE_ID } from './constants.js';
 import { deployParty } from './deploy.js';
 import { createPartyTokenFromFolder } from './partyToken.js';
+import { recallParty } from './recall.js';
 import { registerModuleSettings } from './settings.js';
 import { registerTokenHudButton } from './hud.js';
 
@@ -17,6 +18,7 @@ Hooks.once('ready', () => {
     (mod as { api?: Record<string, unknown> }).api = {
       deployParty,
       createPartyTokenFromFolder,
+      recallParty,
     };
   }
 });

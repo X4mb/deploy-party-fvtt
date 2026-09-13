@@ -1,9 +1,17 @@
 // src/constants.ts
 var MODULE_ID = "deploy-party";
 var FLAGS = {
+  // Set on the party marker token.
   IS_PARTY_TOKEN: "isPartyToken",
   FOLDER_UUID: "folderUuid",
-  FOLDER_NAME: "folderName"
+  FOLDER_NAME: "folderName",
+  /** The batch id of the marker's most recent deploy, so Recall knows which tokens are still "out". */
+  LAST_DEPLOY_BATCH_ID: "lastDeployBatchId",
+  // Set on each token spawned by a deploy, so it can find its way back.
+  DEPLOY_BATCH_ID: "deployBatchId",
+  ORIGIN_MARKER_ID: "originMarkerId",
+  ORIGIN_FOLDER_UUID: "originFolderUuid",
+  ORIGIN_FOLDER_NAME: "originFolderName"
 };
 var DEFAULT_TOKEN_IMAGE = `modules/${MODULE_ID}/assets/party-token.svg`;
 
@@ -19,6 +27,9 @@ function actorTokenSource(actor) {
 }
 function foldersOf(folder) {
   return folder;
+}
+function sceneTokens(scene) {
+  return scene;
 }
 
 // src/settings.ts
@@ -226,6 +237,7 @@ async function deployParty(tokenDoc) {
   const centerX = tokenDoc.x + tokenDoc.width * gridSize / 2;
   const centerY = tokenDoc.y + tokenDoc.height * gridSize / 2;
   const offsets = computeGridOffsets(actors.length);
+  const batchId = foundry.utils.randomID();
   const tokenDataList = [];
   for (let i = 0; i < actors.length; i++) {
     const actor = actors[i];
@@ -238,8 +250,18 @@ async function deployParty(tokenDoc) {
     const height = Number(data.height ?? 1);
     data.x = targetX - width * gridSize / 2;
     data.y = targetY - height * gridSize / 2;
+    data.flags = {
+      ...data.flags,
+      [MODULE_ID]: {
+        [FLAGS.DEPLOY_BATCH_ID]: batchId,
+        [FLAGS.ORIGIN_MARKER_ID]: tokenDoc.id,
+        [FLAGS.ORIGIN_FOLDER_UUID]: folder.uuid,
+        [FLAGS.ORIGIN_FOLDER_NAME]: folder.name
+      }
+    };
     tokenDataList.push(data);
   }
+  await flags(tokenDoc).setFlag(MODULE_ID, FLAGS.LAST_DEPLOY_BATCH_ID, batchId);
   await tokenCreator(scene).createEmbeddedDocuments("Token", tokenDataList);
   await applyAfterDeployBehavior(tokenDoc);
   ui.notifications?.info(
@@ -252,33 +274,111 @@ async function applyAfterDeployBehavior(tokenDoc) {
   else if (behavior === AFTER_DEPLOY_BEHAVIORS.HIDE) await tokenDoc.update({ hidden: true });
 }
 
+// src/recall.ts
+function isPartyMarker(tokenDoc) {
+  return Boolean(flags(tokenDoc).getFlag(MODULE_ID, FLAGS.IS_PARTY_TOKEN));
+}
+function isDeployedMember(tokenDoc) {
+  return Boolean(flags(tokenDoc).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID));
+}
+async function recallParty(tokenDoc) {
+  const scene = tokenDoc.parent;
+  if (!scene) return;
+  const batchId = isPartyMarker(tokenDoc) ? flags(tokenDoc).getFlag(MODULE_ID, FLAGS.LAST_DEPLOY_BATCH_ID) : flags(tokenDoc).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID);
+  const members = batchId ? sceneTokens(scene).tokens.contents.filter(
+    (t) => flags(t).getFlag(MODULE_ID, FLAGS.DEPLOY_BATCH_ID) === batchId
+  ) : [];
+  if (!members.length) {
+    ui.notifications?.warn(
+      loc(`${MODULE_ID}.notifications.nothingToRecall`, "Nothing from this party is currently deployed.")
+    );
+    return;
+  }
+  const grid = scene.grid;
+  const gridSize = grid.size;
+  let sumX = 0;
+  let sumY = 0;
+  for (const member of members) {
+    sumX += member.x + member.width * gridSize / 2;
+    sumY += member.y + member.height * gridSize / 2;
+  }
+  const centroid = { x: sumX / members.length, y: sumY / members.length };
+  const markerId = isPartyMarker(tokenDoc) ? tokenDoc.id : flags(tokenDoc).getFlag(MODULE_ID, FLAGS.ORIGIN_MARKER_ID);
+  const marker = markerId ? sceneTokens(scene).tokens.get(markerId) : void 0;
+  const memberIds = members.map((m) => m.id).filter((id) => Boolean(id));
+  await sceneTokens(scene).deleteEmbeddedDocuments("Token", memberIds);
+  if (marker) {
+    await marker.update({
+      x: centroid.x - marker.width * gridSize / 2,
+      y: centroid.y - marker.height * gridSize / 2,
+      hidden: false
+    });
+  } else {
+    const folderUuid = isPartyMarker(tokenDoc) ? flags(tokenDoc).getFlag(MODULE_ID, FLAGS.FOLDER_UUID) : flags(tokenDoc).getFlag(MODULE_ID, FLAGS.ORIGIN_FOLDER_UUID);
+    const folder = folderUuid ? await fromUuid(folderUuid) : null;
+    if (isActorFolder(folder)) {
+      await createPartyTokenFromFolder(folder, centroid, scene);
+    } else {
+      ui.notifications?.warn(
+        loc(
+          `${MODULE_ID}.notifications.markerGone`,
+          "The party marker and its source folder are both gone; the deployed tokens were removed without a new marker."
+        )
+      );
+    }
+  }
+  ui.notifications?.info(
+    loc(`${MODULE_ID}.notifications.recalled`, "Recalled {count} token(s).").replace("{count}", String(members.length))
+  );
+}
+
 // src/hud.ts
 function toElement(html) {
   if (html instanceof HTMLElement) return html;
   const jq = html;
   return jq?.[0] instanceof HTMLElement ? jq[0] : null;
 }
+function addHudButton(column, className, icon, title, onClick) {
+  if (column.querySelector(`.${className}`)) return;
+  const button = document.createElement("div");
+  button.classList.add("control-icon", className);
+  button.setAttribute("role", "button");
+  button.title = title;
+  button.innerHTML = `<i class="fa-solid ${icon}"></i>`;
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onClick();
+  });
+  column.appendChild(button);
+}
 function registerTokenHudButton() {
   Hooks.on("renderTokenHUD", (hud, html) => {
     const token = hud.object;
     const doc = token?.document;
-    if (!doc || !flags(doc).getFlag(MODULE_ID, FLAGS.IS_PARTY_TOKEN)) return;
-    if (!doc.isOwner) return;
+    if (!doc || !doc.isOwner) return;
+    const isMarker = isPartyMarker(doc);
+    const isMember = isDeployedMember(doc);
+    if (!isMarker && !isMember) return;
     const root = toElement(html);
     if (!root) return;
-    if (root.querySelector(".deploy-party-hud-button")) return;
     const column = root.querySelector(".col.right") ?? root.querySelector(".col.left") ?? root;
-    const button = document.createElement("div");
-    button.classList.add("control-icon", "deploy-party-hud-button");
-    button.setAttribute("role", "button");
-    button.title = loc(`${MODULE_ID}.hud.deploy`, "Deploy party");
-    button.innerHTML = '<i class="fa-solid fa-people-group"></i>';
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void deployParty(doc);
-    });
-    column.appendChild(button);
+    if (isMarker) {
+      addHudButton(
+        column,
+        "deploy-party-hud-deploy",
+        "fa-people-group",
+        loc(`${MODULE_ID}.hud.deploy`, "Deploy party"),
+        () => void deployParty(doc)
+      );
+    }
+    addHudButton(
+      column,
+      "deploy-party-hud-recall",
+      "fa-people-arrows",
+      loc(`${MODULE_ID}.hud.recall`, "Recall party"),
+      () => void recallParty(doc)
+    );
   });
 }
 
@@ -293,7 +393,8 @@ Hooks.once("ready", () => {
   if (mod) {
     mod.api = {
       deployParty,
-      createPartyTokenFromFolder
+      createPartyTokenFromFolder,
+      recallParty
     };
   }
 });

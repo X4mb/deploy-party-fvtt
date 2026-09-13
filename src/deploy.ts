@@ -67,6 +67,8 @@ export async function deployParty(tokenDoc: TokenDocument): Promise<void> {
   const centerY = tokenDoc.y + (tokenDoc.height * gridSize) / 2;
   const offsets = computeGridOffsets(actors.length);
 
+  const batchId = foundry.utils.randomID();
+
   const tokenDataList: Record<string, unknown>[] = [];
   for (let i = 0; i < actors.length; i++) {
     const actor = actors[i];
@@ -81,9 +83,19 @@ export async function deployParty(tokenDoc: TokenDocument): Promise<void> {
     const height = Number(data.height ?? 1);
     data.x = targetX - (width * gridSize) / 2;
     data.y = targetY - (height * gridSize) / 2;
+    data.flags = {
+      ...(data.flags as Record<string, unknown> | undefined),
+      [MODULE_ID]: {
+        [FLAGS.DEPLOY_BATCH_ID]: batchId,
+        [FLAGS.ORIGIN_MARKER_ID]: tokenDoc.id,
+        [FLAGS.ORIGIN_FOLDER_UUID]: folder.uuid,
+        [FLAGS.ORIGIN_FOLDER_NAME]: folder.name,
+      },
+    };
     tokenDataList.push(data);
   }
 
+  await flags(tokenDoc).setFlag(MODULE_ID, FLAGS.LAST_DEPLOY_BATCH_ID, batchId);
   await tokenCreator(scene).createEmbeddedDocuments('Token', tokenDataList);
   await applyAfterDeployBehavior(tokenDoc);
 

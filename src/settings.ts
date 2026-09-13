@@ -16,6 +16,7 @@ export function loc(key: string, fallback: string): string {
 }
 
 export const SETTINGS = {
+  DEPLOY_ON_DROP: 'deployOnDrop',
   INCLUDE_SUBFOLDERS: 'includeSubfolders',
   AFTER_DEPLOY: 'afterDeployBehavior',
   SPACING: 'tokenSpacing',
@@ -30,6 +31,18 @@ export const AFTER_DEPLOY_BEHAVIORS = {
 } as const;
 
 export function registerModuleSettings(): void {
+  s().register(MODULE_ID, SETTINGS.DEPLOY_ON_DROP, {
+    name: loc(`${MODULE_ID}.SETTINGS.deployOnDrop.name`, 'Deploy immediately on drop'),
+    hint: loc(
+      `${MODULE_ID}.SETTINGS.deployOnDrop.hint`,
+      'When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later.',
+    ),
+    scope: 'world',
+    config: true,
+    type: Boolean,
+    default: false,
+  });
+
   s().register(MODULE_ID, SETTINGS.INCLUDE_SUBFOLDERS, {
     name: loc(`${MODULE_ID}.SETTINGS.includeSubfolders.name`, 'Include subfolders when deploying'),
     hint: loc(
@@ -97,6 +110,10 @@ export function registerModuleSettings(): void {
     filePicker: 'image',
     default: DEFAULT_TOKEN_IMAGE,
   });
+}
+
+export function getDeployOnDrop(): boolean {
+  return Boolean(s().get(MODULE_ID, SETTINGS.DEPLOY_ON_DROP));
 }
 
 export function getIncludeSubfolders(): boolean {

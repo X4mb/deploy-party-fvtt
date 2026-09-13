@@ -19,7 +19,7 @@ export async function createPartyTokenFromFolder(
   if (!scene) return null;
 
   if (!game.user?.isGM) {
-    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, 'Only the GM can create a party marker.'));
+    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, 'Only the GM can do that.'));
     return null;
   }
 

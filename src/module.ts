@@ -1,6 +1,6 @@
 import { registerCanvasDrop } from './canvasDrop.js';
 import { MODULE_ID } from './constants.js';
-import { deployParty } from './deploy.js';
+import { deployFolderDirectly, deployParty } from './deploy.js';
 import { createPartyTokenFromFolder } from './partyToken.js';
 import { recallParty } from './recall.js';
 import { registerModuleSettings } from './settings.js';
@@ -17,6 +17,7 @@ Hooks.once('ready', () => {
   if (mod) {
     (mod as { api?: Record<string, unknown> }).api = {
       deployParty,
+      deployFolderDirectly,
       createPartyTokenFromFolder,
       recallParty,
     };

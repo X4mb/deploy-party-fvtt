@@ -41,6 +41,7 @@ function loc(key, fallback) {
   return v === key ? fallback : v;
 }
 var SETTINGS = {
+  DEPLOY_ON_DROP: "deployOnDrop",
   INCLUDE_SUBFOLDERS: "includeSubfolders",
   AFTER_DEPLOY: "afterDeployBehavior",
   SPACING: "tokenSpacing",
@@ -53,6 +54,17 @@ var AFTER_DEPLOY_BEHAVIORS = {
   DELETE: "delete"
 };
 function registerModuleSettings() {
+  s().register(MODULE_ID, SETTINGS.DEPLOY_ON_DROP, {
+    name: loc(`${MODULE_ID}.SETTINGS.deployOnDrop.name`, "Deploy immediately on drop"),
+    hint: loc(
+      `${MODULE_ID}.SETTINGS.deployOnDrop.hint`,
+      "When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later."
+    ),
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
   s().register(MODULE_ID, SETTINGS.INCLUDE_SUBFOLDERS, {
     name: loc(`${MODULE_ID}.SETTINGS.includeSubfolders.name`, "Include subfolders when deploying"),
     hint: loc(
@@ -117,6 +129,9 @@ function registerModuleSettings() {
     default: DEFAULT_TOKEN_IMAGE
   });
 }
+function getDeployOnDrop() {
+  return Boolean(s().get(MODULE_ID, SETTINGS.DEPLOY_ON_DROP));
+}
 function getIncludeSubfolders() {
   return Boolean(s().get(MODULE_ID, SETTINGS.INCLUDE_SUBFOLDERS));
 }
@@ -136,6 +151,131 @@ function getDefaultTokenImage() {
   return typeof v === "string" && v.length > 0 ? v : DEFAULT_TOKEN_IMAGE;
 }
 
+// src/spawn.ts
+function collectActorsInFolder(folder, recursive) {
+  const actors = [...folder.contents];
+  if (recursive) {
+    for (const sub of foldersOf(folder).getSubfolders(true)) {
+      actors.push(...sub.contents);
+    }
+  }
+  return actors;
+}
+function computeGridOffsets(count) {
+  const columns = Math.max(1, Math.ceil(Math.sqrt(count)));
+  const rows = Math.ceil(count / columns);
+  const offsets = [];
+  for (let i = 0; i < count; i++) {
+    const col = i % columns;
+    const row = Math.floor(i / columns);
+    offsets.push({ col: col - (columns - 1) / 2, row: row - (rows - 1) / 2 });
+  }
+  return offsets;
+}
+async function spawnActorsAround(scene, actors, center, options = {}) {
+  const grid = scene.grid;
+  const gridSize = grid.size;
+  const spacing = getSpacing();
+  const offsets = computeGridOffsets(actors.length);
+  const tokenDataList = [];
+  for (let i = 0; i < actors.length; i++) {
+    const actor = actors[i];
+    const offset = offsets[i];
+    const targetX = center.x + offset.col * gridSize * spacing;
+    const targetY = center.y + offset.row * gridSize * spacing;
+    const td = await actorTokenSource(actor).getTokenDocument({ hidden: options.hidden ?? false }, { parent: scene });
+    const data = td.toObject();
+    const width = Number(data.width ?? 1);
+    const height = Number(data.height ?? 1);
+    data.x = targetX - width * gridSize / 2;
+    data.y = targetY - height * gridSize / 2;
+    const extra = options.extraFlags?.(actor, i);
+    if (extra) {
+      data.flags = {
+        ...data.flags,
+        [MODULE_ID]: extra
+      };
+    }
+    tokenDataList.push(data);
+  }
+  await tokenCreator(scene).createEmbeddedDocuments("Token", tokenDataList);
+}
+
+// src/deploy.ts
+async function deployParty(tokenDoc) {
+  const folderUuid = flags(tokenDoc).getFlag(MODULE_ID, FLAGS.FOLDER_UUID);
+  const folder = folderUuid ? await fromUuid(folderUuid) : null;
+  if (!(folder instanceof Folder)) {
+    const name = flags(tokenDoc).getFlag(MODULE_ID, FLAGS.FOLDER_NAME) ?? tokenDoc.name ?? "";
+    ui.notifications?.warn(
+      loc(`${MODULE_ID}.notifications.folderMissing`, 'The source folder for "{name}" no longer exists.').replace(
+        "{name}",
+        name
+      )
+    );
+    return;
+  }
+  const scene = tokenDoc.parent;
+  if (!scene) return;
+  const actors = collectActorsInFolder(folder, getIncludeSubfolders());
+  if (!actors.length) {
+    ui.notifications?.warn(
+      loc(`${MODULE_ID}.notifications.folderEmpty`, 'The folder "{name}" has no actors to deploy.').replace(
+        "{name}",
+        folder.name
+      )
+    );
+    return;
+  }
+  const grid = scene.grid;
+  const gridSize = grid.size;
+  const center = {
+    x: tokenDoc.x + tokenDoc.width * gridSize / 2,
+    y: tokenDoc.y + tokenDoc.height * gridSize / 2
+  };
+  const batchId = foundry.utils.randomID();
+  await flags(tokenDoc).setFlag(MODULE_ID, FLAGS.LAST_DEPLOY_BATCH_ID, batchId);
+  await spawnActorsAround(scene, actors, center, {
+    hidden: tokenDoc.hidden,
+    extraFlags: () => ({
+      [FLAGS.DEPLOY_BATCH_ID]: batchId,
+      [FLAGS.ORIGIN_MARKER_ID]: tokenDoc.id,
+      [FLAGS.ORIGIN_FOLDER_UUID]: folder.uuid,
+      [FLAGS.ORIGIN_FOLDER_NAME]: folder.name
+    })
+  });
+  await applyAfterDeployBehavior(tokenDoc);
+  ui.notifications?.info(
+    loc(`${MODULE_ID}.notifications.deployed`, 'Deployed {count} token(s) from "{name}".').replace("{count}", String(actors.length)).replace("{name}", folder.name)
+  );
+}
+async function deployFolderDirectly(folder, point, scene = canvas?.scene ?? null) {
+  if (!scene) return;
+  if (!game.user?.isGM) {
+    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can do that."));
+    return;
+  }
+  const actors = collectActorsInFolder(folder, getIncludeSubfolders());
+  if (!actors.length) {
+    ui.notifications?.warn(
+      loc(`${MODULE_ID}.notifications.folderEmpty`, 'The folder "{name}" has no actors to deploy.').replace(
+        "{name}",
+        folder.name
+      )
+    );
+    return;
+  }
+  await spawnActorsAround(scene, actors, point);
+  ui.notifications?.info(
+    loc(`${MODULE_ID}.notifications.deployed`, 'Deployed {count} token(s) from "{name}".').replace("{count}", String(actors.length)).replace("{name}", folder.name)
+  );
+}
+async function applyAfterDeployBehavior(tokenDoc) {
+  const behavior = getAfterDeployBehavior();
+  if (behavior === AFTER_DEPLOY_BEHAVIORS.DELETE) await tokenDoc.delete();
+  else if (behavior === AFTER_DEPLOY_BEHAVIORS.HIDE) await tokenDoc.update({ hidden: true });
+}
+
 // src/partyToken.ts
 function isActorFolder(doc) {
   return doc instanceof Folder && doc.type === "Actor";
@@ -143,7 +283,7 @@ function isActorFolder(doc) {
 async function createPartyTokenFromFolder(folder, point, scene = canvas?.scene ?? null) {
   if (!scene) return null;
   if (!game.user?.isGM) {
-    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can create a party marker."));
+    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can do that."));
     return null;
   }
   const grid = scene.grid;
@@ -182,96 +322,12 @@ function registerCanvasDrop() {
 async function handleFolderDrop(data) {
   const folder = await fromUuid(data.uuid);
   if (!isActorFolder(folder)) return;
-  await createPartyTokenFromFolder(folder, { x: data.x, y: data.y });
-}
-
-// src/deploy.ts
-function collectActorsInFolder(folder, recursive) {
-  const actors = [...folder.contents];
-  if (recursive) {
-    for (const sub of foldersOf(folder).getSubfolders(true)) {
-      actors.push(...sub.contents);
-    }
+  const point = { x: data.x, y: data.y };
+  if (getDeployOnDrop()) {
+    await deployFolderDirectly(folder, point);
+  } else {
+    await createPartyTokenFromFolder(folder, point);
   }
-  return actors;
-}
-function computeGridOffsets(count) {
-  const columns = Math.max(1, Math.ceil(Math.sqrt(count)));
-  const rows = Math.ceil(count / columns);
-  const offsets = [];
-  for (let i = 0; i < count; i++) {
-    const col = i % columns;
-    const row = Math.floor(i / columns);
-    offsets.push({ col: col - (columns - 1) / 2, row: row - (rows - 1) / 2 });
-  }
-  return offsets;
-}
-async function deployParty(tokenDoc) {
-  const folderUuid = flags(tokenDoc).getFlag(MODULE_ID, FLAGS.FOLDER_UUID);
-  const folder = folderUuid ? await fromUuid(folderUuid) : null;
-  if (!(folder instanceof Folder)) {
-    const name = flags(tokenDoc).getFlag(MODULE_ID, FLAGS.FOLDER_NAME) ?? tokenDoc.name ?? "";
-    ui.notifications?.warn(
-      loc(`${MODULE_ID}.notifications.folderMissing`, 'The source folder for "{name}" no longer exists.').replace(
-        "{name}",
-        name
-      )
-    );
-    return;
-  }
-  const scene = tokenDoc.parent;
-  if (!scene) return;
-  const actors = collectActorsInFolder(folder, getIncludeSubfolders());
-  if (!actors.length) {
-    ui.notifications?.warn(
-      loc(`${MODULE_ID}.notifications.folderEmpty`, 'The folder "{name}" has no actors to deploy.').replace(
-        "{name}",
-        folder.name
-      )
-    );
-    return;
-  }
-  const grid = scene.grid;
-  const gridSize = grid.size;
-  const spacing = getSpacing();
-  const centerX = tokenDoc.x + tokenDoc.width * gridSize / 2;
-  const centerY = tokenDoc.y + tokenDoc.height * gridSize / 2;
-  const offsets = computeGridOffsets(actors.length);
-  const batchId = foundry.utils.randomID();
-  const tokenDataList = [];
-  for (let i = 0; i < actors.length; i++) {
-    const actor = actors[i];
-    const offset = offsets[i];
-    const targetX = centerX + offset.col * gridSize * spacing;
-    const targetY = centerY + offset.row * gridSize * spacing;
-    const td = await actorTokenSource(actor).getTokenDocument({ hidden: tokenDoc.hidden }, { parent: scene });
-    const data = td.toObject();
-    const width = Number(data.width ?? 1);
-    const height = Number(data.height ?? 1);
-    data.x = targetX - width * gridSize / 2;
-    data.y = targetY - height * gridSize / 2;
-    data.flags = {
-      ...data.flags,
-      [MODULE_ID]: {
-        [FLAGS.DEPLOY_BATCH_ID]: batchId,
-        [FLAGS.ORIGIN_MARKER_ID]: tokenDoc.id,
-        [FLAGS.ORIGIN_FOLDER_UUID]: folder.uuid,
-        [FLAGS.ORIGIN_FOLDER_NAME]: folder.name
-      }
-    };
-    tokenDataList.push(data);
-  }
-  await flags(tokenDoc).setFlag(MODULE_ID, FLAGS.LAST_DEPLOY_BATCH_ID, batchId);
-  await tokenCreator(scene).createEmbeddedDocuments("Token", tokenDataList);
-  await applyAfterDeployBehavior(tokenDoc);
-  ui.notifications?.info(
-    loc(`${MODULE_ID}.notifications.deployed`, 'Deployed {count} token(s) from "{name}".').replace("{count}", String(actors.length)).replace("{name}", folder.name)
-  );
-}
-async function applyAfterDeployBehavior(tokenDoc) {
-  const behavior = getAfterDeployBehavior();
-  if (behavior === AFTER_DEPLOY_BEHAVIORS.DELETE) await tokenDoc.delete();
-  else if (behavior === AFTER_DEPLOY_BEHAVIORS.HIDE) await tokenDoc.update({ hidden: true });
 }
 
 // src/recall.ts
@@ -393,6 +449,7 @@ Hooks.once("ready", () => {
   if (mod) {
     mod.api = {
       deployParty,
+      deployFolderDirectly,
       createPartyTokenFromFolder,
       recallParty
     };

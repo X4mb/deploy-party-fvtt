@@ -1,0 +1,20 @@
+{
+  "deploy-party.SETTINGS.includeSubfolders.name": "Include subfolders when deploying",
+  "deploy-party.SETTINGS.includeSubfolders.hint": "When enabled, Deploy also drops actors found in nested subfolders, not just the folder that was dragged onto the canvas.",
+  "deploy-party.SETTINGS.afterDeployBehavior.name": "After deploying, the party marker should",
+  "deploy-party.SETTINGS.afterDeployBehavior.hint": "What happens to the party token itself once its members have been placed on the scene.",
+  "deploy-party.SETTINGS.afterDeployBehavior.keep": "Stay on the scene",
+  "deploy-party.SETTINGS.afterDeployBehavior.hide": "Be hidden",
+  "deploy-party.SETTINGS.afterDeployBehavior.delete": "Be deleted",
+  "deploy-party.SETTINGS.tokenSpacing.name": "Deploy spacing (grid squares)",
+  "deploy-party.SETTINGS.tokenSpacing.hint": "Gap between deployed tokens, measured in grid squares. Lower values pack tokens tighter together.",
+  "deploy-party.SETTINGS.partyTokenSize.name": "Party marker size (grid squares)",
+  "deploy-party.SETTINGS.partyTokenSize.hint": "Width and height of the party marker created when a folder is dropped onto the canvas.",
+  "deploy-party.SETTINGS.defaultTokenImage.name": "Default party marker image",
+  "deploy-party.SETTINGS.defaultTokenImage.hint": "Artwork used for newly created party markers. Pick any image from your file system or a compendium pack.",
+  "deploy-party.hud.deploy": "Deploy party",
+  "deploy-party.notifications.gmOnly": "Only the GM can create a party marker.",
+  "deploy-party.notifications.folderMissing": "The source folder for \"{name}\" no longer exists.",
+  "deploy-party.notifications.folderEmpty": "The folder \"{name}\" has no actors to deploy.",
+  "deploy-party.notifications.deployed": "Deployed {count} token(s) from \"{name}\"."
+}

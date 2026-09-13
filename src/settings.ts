@@ -35,7 +35,7 @@ export function registerModuleSettings(): void {
     name: loc(`${MODULE_ID}.SETTINGS.deployOnDrop.name`, 'Deploy immediately on drop'),
     hint: loc(
       `${MODULE_ID}.SETTINGS.deployOnDrop.hint`,
-      'When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later.',
+      'When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later. Hold Shift while dropping to do the opposite just for that drop.',
     ),
     scope: 'world',
     config: true,

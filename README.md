@@ -10,7 +10,7 @@
 
 Each actor uses its own prototype token, so vision, disposition, and size come out the way that actor is already configured — no system-specific code.
 
-Prefer to skip the marker? Turn on **Deploy immediately on drop** and dragging a folder deploys it straight away.
+Prefer to skip the marker? Turn on **Deploy immediately on drop** and dragging a folder deploys it straight away — or hold **Shift** while dropping to do the opposite of that setting just for one drop.
 
 ## Settings (world scope, GM only)
 

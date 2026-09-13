@@ -56,7 +56,7 @@ function registerModuleSettings() {
     name: loc(`${MODULE_ID}.SETTINGS.deployOnDrop.name`, "Deploy immediately on drop"),
     hint: loc(
       `${MODULE_ID}.SETTINGS.deployOnDrop.hint`,
-      "When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later."
+      "When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later. Hold Shift while dropping to do the opposite just for that drop."
     ),
     scope: "world",
     config: true,
@@ -315,23 +315,32 @@ async function createPartyTokenFromFolder(folder, point, scene = canvas?.scene ?
       }
     }
   ]);
+  if (!collectActorsInFolder(folder, getIncludeSubfolders()).length) {
+    ui.notifications?.warn(
+      loc(
+        `${MODULE_ID}.notifications.markerEmptyFolder`,
+        'The folder "{name}" has no actors to deploy yet \u2014 add some (or enable subfolders) before deploying this marker.'
+      ).replace("{name}", folder.name)
+    );
+  }
   return created[0] ?? null;
 }
 
 // src/canvasDrop.ts
 function registerCanvasDrop() {
-  Hooks.on("dropCanvasData", (_canvas, rawData) => {
+  Hooks.on("dropCanvasData", (_canvas, rawData, rawEvent) => {
     const data = rawData;
     if (data?.type !== "Folder") return true;
-    void handleFolderDrop(data);
+    void handleFolderDrop(data, rawEvent);
     return false;
   });
 }
-async function handleFolderDrop(data) {
+async function handleFolderDrop(data, event) {
   const folder = await fromUuid(data.uuid);
   if (!isActorFolder(folder)) return;
   const point = { x: data.x, y: data.y };
-  if (getDeployOnDrop()) {
+  const deployImmediately = event?.shiftKey ? !getDeployOnDrop() : getDeployOnDrop();
+  if (deployImmediately) {
     await deployFolderDirectly(folder, point);
   } else {
     await createPartyTokenFromFolder(folder, point);

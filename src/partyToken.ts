@@ -1,6 +1,7 @@
 import { DEFAULT_TOKEN_IMAGE, FLAGS, MODULE_ID } from './constants.js';
 import { tokenCreator } from './foundryApi.js';
-import { getDefaultTokenImage, getPartyTokenSize, loc } from './settings.js';
+import { collectActorsInFolder } from './spawn.js';
+import { getDefaultTokenImage, getIncludeSubfolders, getPartyTokenSize, loc } from './settings.js';
 
 /** Folders became real Documents in Foundry v11+; `type` names the kind of document they hold. */
 export function isActorFolder(doc: unknown): doc is Folder {
@@ -45,6 +46,15 @@ export async function createPartyTokenFromFolder(
       },
     },
   ])) as TokenDocument[];
+
+  if (!collectActorsInFolder(folder, getIncludeSubfolders()).length) {
+    ui.notifications?.warn(
+      loc(
+        `${MODULE_ID}.notifications.markerEmptyFolder`,
+        'The folder "{name}" has no actors to deploy yet — add some (or enable subfolders) before deploying this marker.',
+      ).replace('{name}', folder.name),
+    );
+  }
 
   return created[0] ?? null;
 }

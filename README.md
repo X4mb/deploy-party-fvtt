@@ -10,13 +10,14 @@
 
 Each actor uses its own prototype token, so vision, disposition, and size come out the way that actor is already configured — no system-specific code.
 
-Prefer to skip the marker? Turn on **Deploy immediately on drop** and dragging a folder deploys it straight away — or hold **Shift** while dropping to do the opposite of that setting just for one drop.
+Prefer to skip the marker? Turn on **Deploy immediately on drop** and dragging a folder deploys it straight away, then applies **After deploying, the party marker should** to decide the marker's fate. Hold **Shift** while dropping to use **Shift+Drop: party marker should instead** for that one drop — e.g. normally delete the marker, but Shift-drop to keep it around hidden for a quick recall later.
 
 ## Settings (world scope, GM only)
 
 - **Deploy immediately on drop** — skip the marker; deploy the folder as soon as it's dropped
+- **Shift+Drop: party marker should instead** — overrides the setting below for one Shift-held drop (default: hidden)
 - **Include subfolders when deploying**
-- **After deploying, the party marker should** — stay, hide, or delete (default: hidden)
+- **After deploying, the party marker should** — stay, hide, or delete (default: deleted)
 - **Deploy spacing** and **party marker size** (grid squares)
 - **Default party marker image**
 

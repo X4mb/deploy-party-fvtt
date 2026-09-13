@@ -1,6 +1,6 @@
 import { deployFolderDirectly } from './deploy.js';
 import { createPartyTokenFromFolder, isActorFolder } from './partyToken.js';
-import { getDeployOnDrop } from './settings.js';
+import { getAfterDeployBehavior, getDeployOnDrop, getShiftAfterDeployBehavior } from './settings.js';
 
 interface DropCanvasFolderData {
   type: string;
@@ -12,8 +12,9 @@ interface DropCanvasFolderData {
 /**
  * Foundry only knows how to turn a dropped "Actor" onto the canvas; dropping a "Folder"
  * does nothing by default. We intercept that case here and either build a party marker,
- * or (if the "deploy immediately" setting is on) deploy the folder's actors right away.
- * Holding Shift while dropping inverts the setting for that one drop.
+ * or (if the "deploy immediately" setting is on) deploy the folder's actors right away —
+ * holding Shift during that deploy swaps in the "Shift+Drop" marker behavior instead of
+ * the usual "after deploying" one.
  */
 export function registerCanvasDrop(): void {
   Hooks.on('dropCanvasData', (_canvas: Canvas, rawData: unknown, rawEvent: unknown): boolean => {
@@ -29,10 +30,10 @@ async function handleFolderDrop(data: DropCanvasFolderData, event?: DragEvent): 
   if (!isActorFolder(folder)) return;
 
   const point = { x: data.x, y: data.y };
-  const deployImmediately = event?.shiftKey ? !getDeployOnDrop() : getDeployOnDrop();
 
-  if (deployImmediately) {
-    await deployFolderDirectly(folder, point);
+  if (getDeployOnDrop()) {
+    const behavior = event?.shiftKey ? getShiftAfterDeployBehavior() : getAfterDeployBehavior();
+    await deployFolderDirectly(folder, point, undefined, behavior);
   } else {
     await createPartyTokenFromFolder(folder, point);
   }

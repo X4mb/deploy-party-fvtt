@@ -40,6 +40,7 @@ function loc(key, fallback) {
 }
 var SETTINGS = {
   DEPLOY_ON_DROP: "deployOnDrop",
+  SHIFT_AFTER_DEPLOY: "shiftAfterDeployBehavior",
   INCLUDE_SUBFOLDERS: "includeSubfolders",
   AFTER_DEPLOY: "afterDeployBehavior",
   SPACING: "tokenSpacing",
@@ -56,12 +57,28 @@ function registerModuleSettings() {
     name: loc(`${MODULE_ID}.SETTINGS.deployOnDrop.name`, "Deploy immediately on drop"),
     hint: loc(
       `${MODULE_ID}.SETTINGS.deployOnDrop.hint`,
-      "When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later. Hold Shift while dropping to do the opposite just for that drop."
+      'When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later. Hold Shift while dropping to use the "Shift+Drop" marker behavior below instead of the usual one.'
     ),
     scope: "world",
     config: true,
     type: Boolean,
     default: false
+  });
+  s().register(MODULE_ID, SETTINGS.SHIFT_AFTER_DEPLOY, {
+    name: loc(`${MODULE_ID}.SETTINGS.shiftAfterDeployBehavior.name`, "Shift+Drop: party marker should instead"),
+    hint: loc(
+      `${MODULE_ID}.SETTINGS.shiftAfterDeployBehavior.hint`,
+      'Only applies when "Deploy immediately on drop" is on and you hold Shift while dropping the folder: overrides "After deploying, the party marker should" for that one drop.'
+    ),
+    scope: "world",
+    config: true,
+    type: String,
+    choices: {
+      [AFTER_DEPLOY_BEHAVIORS.KEEP]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.keep`, "Stay on the scene"),
+      [AFTER_DEPLOY_BEHAVIORS.HIDE]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.hide`, "Be hidden"),
+      [AFTER_DEPLOY_BEHAVIORS.DELETE]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.delete`, "Be deleted")
+    },
+    default: AFTER_DEPLOY_BEHAVIORS.HIDE
   });
   s().register(MODULE_ID, SETTINGS.INCLUDE_SUBFOLDERS, {
     name: loc(`${MODULE_ID}.SETTINGS.includeSubfolders.name`, "Include subfolders when deploying"),
@@ -88,7 +105,7 @@ function registerModuleSettings() {
       [AFTER_DEPLOY_BEHAVIORS.HIDE]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.hide`, "Be hidden"),
       [AFTER_DEPLOY_BEHAVIORS.DELETE]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.delete`, "Be deleted")
     },
-    default: AFTER_DEPLOY_BEHAVIORS.HIDE
+    default: AFTER_DEPLOY_BEHAVIORS.DELETE
   });
   s().register(MODULE_ID, SETTINGS.SPACING, {
     name: loc(`${MODULE_ID}.SETTINGS.tokenSpacing.name`, "Deploy spacing (grid squares)"),
@@ -129,6 +146,9 @@ function registerModuleSettings() {
 }
 function getDeployOnDrop() {
   return Boolean(s().get(MODULE_ID, SETTINGS.DEPLOY_ON_DROP));
+}
+function getShiftAfterDeployBehavior() {
+  return String(s().get(MODULE_ID, SETTINGS.SHIFT_AFTER_DEPLOY) ?? AFTER_DEPLOY_BEHAVIORS.HIDE);
 }
 function getIncludeSubfolders() {
   return Boolean(s().get(MODULE_ID, SETTINGS.INCLUDE_SUBFOLDERS));
@@ -199,8 +219,50 @@ async function spawnActorsAround(scene, actors, center, options = {}) {
   await tokenCreator(scene).createEmbeddedDocuments("Token", tokenDataList);
 }
 
+// src/partyToken.ts
+function isActorFolder(doc) {
+  return doc instanceof Folder && doc.type === "Actor";
+}
+async function createPartyTokenFromFolder(folder, point, scene = canvas?.scene ?? null) {
+  if (!scene) return null;
+  if (!game.user?.isGM) {
+    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can do that."));
+    return null;
+  }
+  const grid = scene.grid;
+  const gridSize = grid.size;
+  const size = getPartyTokenSize();
+  const created = await tokenCreator(scene).createEmbeddedDocuments("Token", [
+    {
+      name: folder.name,
+      width: size,
+      height: size,
+      x: point.x - size * gridSize / 2,
+      y: point.y - size * gridSize / 2,
+      texture: { src: getDefaultTokenImage() || DEFAULT_TOKEN_IMAGE },
+      disposition: CONST.TOKEN_DISPOSITIONS.FRIENDLY,
+      flags: {
+        [MODULE_ID]: {
+          [FLAGS.IS_PARTY_TOKEN]: true,
+          [FLAGS.FOLDER_UUID]: folder.uuid,
+          [FLAGS.FOLDER_NAME]: folder.name
+        }
+      }
+    }
+  ]);
+  if (!collectActorsInFolder(folder, getIncludeSubfolders()).length) {
+    ui.notifications?.warn(
+      loc(
+        `${MODULE_ID}.notifications.markerEmptyFolder`,
+        'The folder "{name}" has no actors to deploy yet \u2014 add some (or enable subfolders) before deploying this marker.'
+      ).replace("{name}", folder.name)
+    );
+  }
+  return created[0] ?? null;
+}
+
 // src/deploy.ts
-async function deployParty(tokenDoc) {
+async function deployParty(tokenDoc, options = {}) {
   if (!game.user?.isGM) {
     ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can do that."));
     return;
@@ -245,85 +307,20 @@ async function deployParty(tokenDoc) {
       [FLAGS.ORIGIN_FOLDER_NAME]: folder.name
     })
   });
-  await applyAfterDeployBehavior(tokenDoc);
+  await applyAfterDeployBehavior(tokenDoc, options.afterDeployBehavior);
   ui.notifications?.info(
     loc(`${MODULE_ID}.notifications.deployed`, 'Deployed {count} token(s) from "{name}".').replace("{count}", String(actors.length)).replace("{name}", folder.name)
   );
 }
-async function deployFolderDirectly(folder, point, scene = canvas?.scene ?? null) {
-  if (!scene) return;
-  if (!game.user?.isGM) {
-    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can do that."));
-    return;
-  }
-  const actors = collectActorsInFolder(folder, getIncludeSubfolders());
-  if (!actors.length) {
-    ui.notifications?.warn(
-      loc(`${MODULE_ID}.notifications.folderEmpty`, 'The folder "{name}" has no actors to deploy.').replace(
-        "{name}",
-        folder.name
-      )
-    );
-    return;
-  }
-  const batchId = foundry.utils.randomID();
-  await spawnActorsAround(scene, actors, point, {
-    extraFlags: () => ({
-      [FLAGS.DEPLOY_BATCH_ID]: batchId,
-      [FLAGS.ORIGIN_FOLDER_UUID]: folder.uuid,
-      [FLAGS.ORIGIN_FOLDER_NAME]: folder.name
-    })
-  });
-  ui.notifications?.info(
-    loc(`${MODULE_ID}.notifications.deployed`, 'Deployed {count} token(s) from "{name}".').replace("{count}", String(actors.length)).replace("{name}", folder.name)
-  );
+async function deployFolderDirectly(folder, point, scene = canvas?.scene ?? null, afterDeployBehavior) {
+  const marker = await createPartyTokenFromFolder(folder, point, scene);
+  if (!marker) return;
+  await deployParty(marker, { afterDeployBehavior });
 }
-async function applyAfterDeployBehavior(tokenDoc) {
-  const behavior = getAfterDeployBehavior();
+async function applyAfterDeployBehavior(tokenDoc, override) {
+  const behavior = override ?? getAfterDeployBehavior();
   if (behavior === AFTER_DEPLOY_BEHAVIORS.DELETE) await tokenDoc.delete();
   else if (behavior === AFTER_DEPLOY_BEHAVIORS.HIDE) await tokenDoc.update({ hidden: true });
-}
-
-// src/partyToken.ts
-function isActorFolder(doc) {
-  return doc instanceof Folder && doc.type === "Actor";
-}
-async function createPartyTokenFromFolder(folder, point, scene = canvas?.scene ?? null) {
-  if (!scene) return null;
-  if (!game.user?.isGM) {
-    ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can do that."));
-    return null;
-  }
-  const grid = scene.grid;
-  const gridSize = grid.size;
-  const size = getPartyTokenSize();
-  const created = await tokenCreator(scene).createEmbeddedDocuments("Token", [
-    {
-      name: folder.name,
-      width: size,
-      height: size,
-      x: point.x - size * gridSize / 2,
-      y: point.y - size * gridSize / 2,
-      texture: { src: getDefaultTokenImage() || DEFAULT_TOKEN_IMAGE },
-      disposition: CONST.TOKEN_DISPOSITIONS.FRIENDLY,
-      flags: {
-        [MODULE_ID]: {
-          [FLAGS.IS_PARTY_TOKEN]: true,
-          [FLAGS.FOLDER_UUID]: folder.uuid,
-          [FLAGS.FOLDER_NAME]: folder.name
-        }
-      }
-    }
-  ]);
-  if (!collectActorsInFolder(folder, getIncludeSubfolders()).length) {
-    ui.notifications?.warn(
-      loc(
-        `${MODULE_ID}.notifications.markerEmptyFolder`,
-        'The folder "{name}" has no actors to deploy yet \u2014 add some (or enable subfolders) before deploying this marker.'
-      ).replace("{name}", folder.name)
-    );
-  }
-  return created[0] ?? null;
 }
 
 // src/canvasDrop.ts
@@ -339,9 +336,9 @@ async function handleFolderDrop(data, event) {
   const folder = await fromUuid(data.uuid);
   if (!isActorFolder(folder)) return;
   const point = { x: data.x, y: data.y };
-  const deployImmediately = event?.shiftKey ? !getDeployOnDrop() : getDeployOnDrop();
-  if (deployImmediately) {
-    await deployFolderDirectly(folder, point);
+  if (getDeployOnDrop()) {
+    const behavior = event?.shiftKey ? getShiftAfterDeployBehavior() : getAfterDeployBehavior();
+    await deployFolderDirectly(folder, point, void 0, behavior);
   } else {
     await createPartyTokenFromFolder(folder, point);
   }

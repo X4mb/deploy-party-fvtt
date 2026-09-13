@@ -17,6 +17,7 @@ export function loc(key: string, fallback: string): string {
 
 export const SETTINGS = {
   DEPLOY_ON_DROP: 'deployOnDrop',
+  SHIFT_AFTER_DEPLOY: 'shiftAfterDeployBehavior',
   INCLUDE_SUBFOLDERS: 'includeSubfolders',
   AFTER_DEPLOY: 'afterDeployBehavior',
   SPACING: 'tokenSpacing',
@@ -35,12 +36,29 @@ export function registerModuleSettings(): void {
     name: loc(`${MODULE_ID}.SETTINGS.deployOnDrop.name`, 'Deploy immediately on drop'),
     hint: loc(
       `${MODULE_ID}.SETTINGS.deployOnDrop.hint`,
-      'When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later. Hold Shift while dropping to do the opposite just for that drop.',
+      'When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later. Hold Shift while dropping to use the "Shift+Drop" marker behavior below instead of the usual one.',
     ),
     scope: 'world',
     config: true,
     type: Boolean,
     default: false,
+  });
+
+  s().register(MODULE_ID, SETTINGS.SHIFT_AFTER_DEPLOY, {
+    name: loc(`${MODULE_ID}.SETTINGS.shiftAfterDeployBehavior.name`, 'Shift+Drop: party marker should instead'),
+    hint: loc(
+      `${MODULE_ID}.SETTINGS.shiftAfterDeployBehavior.hint`,
+      'Only applies when "Deploy immediately on drop" is on and you hold Shift while dropping the folder: overrides "After deploying, the party marker should" for that one drop.',
+    ),
+    scope: 'world',
+    config: true,
+    type: String,
+    choices: {
+      [AFTER_DEPLOY_BEHAVIORS.KEEP]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.keep`, 'Stay on the scene'),
+      [AFTER_DEPLOY_BEHAVIORS.HIDE]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.hide`, 'Be hidden'),
+      [AFTER_DEPLOY_BEHAVIORS.DELETE]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.delete`, 'Be deleted'),
+    },
+    default: AFTER_DEPLOY_BEHAVIORS.HIDE,
   });
 
   s().register(MODULE_ID, SETTINGS.INCLUDE_SUBFOLDERS, {
@@ -69,7 +87,7 @@ export function registerModuleSettings(): void {
       [AFTER_DEPLOY_BEHAVIORS.HIDE]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.hide`, 'Be hidden'),
       [AFTER_DEPLOY_BEHAVIORS.DELETE]: loc(`${MODULE_ID}.SETTINGS.afterDeployBehavior.delete`, 'Be deleted'),
     },
-    default: AFTER_DEPLOY_BEHAVIORS.HIDE,
+    default: AFTER_DEPLOY_BEHAVIORS.DELETE,
   });
 
   s().register(MODULE_ID, SETTINGS.SPACING, {
@@ -114,6 +132,10 @@ export function registerModuleSettings(): void {
 
 export function getDeployOnDrop(): boolean {
   return Boolean(s().get(MODULE_ID, SETTINGS.DEPLOY_ON_DROP));
+}
+
+export function getShiftAfterDeployBehavior(): string {
+  return String(s().get(MODULE_ID, SETTINGS.SHIFT_AFTER_DEPLOY) ?? AFTER_DEPLOY_BEHAVIORS.HIDE);
 }
 
 export function getIncludeSubfolders(): boolean {

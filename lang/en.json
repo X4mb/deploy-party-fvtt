@@ -1,6 +1,8 @@
 {
   "deploy-party.SETTINGS.deployOnDrop.name": "Deploy immediately on drop",
-  "deploy-party.SETTINGS.deployOnDrop.hint": "When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later. Hold Shift while dropping to do the opposite just for that drop.",
+  "deploy-party.SETTINGS.deployOnDrop.hint": "When enabled, dragging a folder onto the canvas deploys every actor in it right away instead of creating a party marker to deploy later. Hold Shift while dropping to use the \"Shift+Drop\" marker behavior below instead of the usual one.",
+  "deploy-party.SETTINGS.shiftAfterDeployBehavior.name": "Shift+Drop: party marker should instead",
+  "deploy-party.SETTINGS.shiftAfterDeployBehavior.hint": "Only applies when \"Deploy immediately on drop\" is on and you hold Shift while dropping the folder: overrides \"After deploying, the party marker should\" for that one drop.",
   "deploy-party.SETTINGS.includeSubfolders.name": "Include subfolders when deploying",
   "deploy-party.SETTINGS.includeSubfolders.hint": "When enabled, Deploy also drops actors found in nested subfolders, not just the folder that was dragged onto the canvas.",
   "deploy-party.SETTINGS.afterDeployBehavior.name": "After deploying, the party marker should",

@@ -16,6 +16,7 @@ export async function createPartyTokenFromFolder(
   folder: Folder,
   point: { x: number; y: number },
   scene: Scene | null = (canvas?.scene as Scene | null) ?? null,
+  { warnIfEmpty = true }: { warnIfEmpty?: boolean } = {},
 ): Promise<TokenDocument | null> {
   if (!scene) return null;
 
@@ -47,7 +48,7 @@ export async function createPartyTokenFromFolder(
     },
   ])) as TokenDocument[];
 
-  if (!collectActorsInFolder(folder, getIncludeSubfolders()).length) {
+  if (warnIfEmpty && !collectActorsInFolder(folder, getIncludeSubfolders()).length) {
     ui.notifications?.warn(
       loc(
         `${MODULE_ID}.notifications.markerEmptyFolder`,

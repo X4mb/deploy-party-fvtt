@@ -223,7 +223,7 @@ async function spawnActorsAround(scene, actors, center, options = {}) {
 function isActorFolder(doc) {
   return doc instanceof Folder && doc.type === "Actor";
 }
-async function createPartyTokenFromFolder(folder, point, scene = canvas?.scene ?? null) {
+async function createPartyTokenFromFolder(folder, point, scene = canvas?.scene ?? null, { warnIfEmpty = true } = {}) {
   if (!scene) return null;
   if (!game.user?.isGM) {
     ui.notifications?.warn(loc(`${MODULE_ID}.notifications.gmOnly`, "Only the GM can do that."));
@@ -250,7 +250,7 @@ async function createPartyTokenFromFolder(folder, point, scene = canvas?.scene ?
       }
     }
   ]);
-  if (!collectActorsInFolder(folder, getIncludeSubfolders()).length) {
+  if (warnIfEmpty && !collectActorsInFolder(folder, getIncludeSubfolders()).length) {
     ui.notifications?.warn(
       loc(
         `${MODULE_ID}.notifications.markerEmptyFolder`,
@@ -313,7 +313,7 @@ async function deployParty(tokenDoc, options = {}) {
   );
 }
 async function deployFolderDirectly(folder, point, scene = canvas?.scene ?? null, afterDeployBehavior) {
-  const marker = await createPartyTokenFromFolder(folder, point, scene);
+  const marker = await createPartyTokenFromFolder(folder, point, scene, { warnIfEmpty: false });
   if (!marker) return;
   await deployParty(marker, { afterDeployBehavior });
 }

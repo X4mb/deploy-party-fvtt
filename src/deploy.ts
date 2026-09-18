@@ -80,7 +80,7 @@ export async function deployFolderDirectly(
   scene: Scene | null = (canvas?.scene as Scene | null) ?? null,
   afterDeployBehavior?: string,
 ): Promise<void> {
-  const marker = await createPartyTokenFromFolder(folder, point, scene);
+  const marker = await createPartyTokenFromFolder(folder, point, scene, { warnIfEmpty: false });
   if (!marker) return;
 
   await deployParty(marker, { afterDeployBehavior });

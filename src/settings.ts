@@ -20,6 +20,7 @@ export const SETTINGS = {
   SHIFT_AFTER_DEPLOY: 'shiftAfterDeployBehavior',
   INCLUDE_SUBFOLDERS: 'includeSubfolders',
   AFTER_DEPLOY: 'afterDeployBehavior',
+  LAYOUT: 'deployLayout',
   SPACING: 'tokenSpacing',
   PARTY_TOKEN_SIZE: 'partyTokenSize',
   DEFAULT_IMAGE: 'defaultTokenImage',
@@ -29,6 +30,13 @@ export const AFTER_DEPLOY_BEHAVIORS = {
   KEEP: 'keep',
   HIDE: 'hide',
   DELETE: 'delete',
+} as const;
+
+export const DEPLOY_LAYOUTS = {
+  GRID: 'grid',
+  LINE: 'line',
+  CIRCLE: 'circle',
+  SCATTER: 'scatter',
 } as const;
 
 export function registerModuleSettings(): void {
@@ -90,6 +98,24 @@ export function registerModuleSettings(): void {
     default: AFTER_DEPLOY_BEHAVIORS.DELETE,
   });
 
+  s().register(MODULE_ID, SETTINGS.LAYOUT, {
+    name: loc(`${MODULE_ID}.SETTINGS.deployLayout.name`, 'Deploy layout'),
+    hint: loc(
+      `${MODULE_ID}.SETTINGS.deployLayout.hint`,
+      'How deployed tokens are arranged around the party marker.',
+    ),
+    scope: 'world',
+    config: true,
+    type: String,
+    choices: {
+      [DEPLOY_LAYOUTS.GRID]: loc(`${MODULE_ID}.SETTINGS.deployLayout.grid`, 'Grid'),
+      [DEPLOY_LAYOUTS.LINE]: loc(`${MODULE_ID}.SETTINGS.deployLayout.line`, 'Line'),
+      [DEPLOY_LAYOUTS.CIRCLE]: loc(`${MODULE_ID}.SETTINGS.deployLayout.circle`, 'Circle'),
+      [DEPLOY_LAYOUTS.SCATTER]: loc(`${MODULE_ID}.SETTINGS.deployLayout.scatter`, 'Scatter'),
+    },
+    default: DEPLOY_LAYOUTS.GRID,
+  });
+
   s().register(MODULE_ID, SETTINGS.SPACING, {
     name: loc(`${MODULE_ID}.SETTINGS.tokenSpacing.name`, 'Deploy spacing (grid squares)'),
     hint: loc(
@@ -144,6 +170,13 @@ export function getIncludeSubfolders(): boolean {
 
 export function getAfterDeployBehavior(): string {
   return String(s().get(MODULE_ID, SETTINGS.AFTER_DEPLOY) ?? AFTER_DEPLOY_BEHAVIORS.HIDE);
+}
+
+export function getDeployLayout(): string {
+  const v = String(s().get(MODULE_ID, SETTINGS.LAYOUT) ?? DEPLOY_LAYOUTS.GRID);
+  return Object.values(DEPLOY_LAYOUTS).includes(v as (typeof DEPLOY_LAYOUTS)[keyof typeof DEPLOY_LAYOUTS])
+    ? v
+    : DEPLOY_LAYOUTS.GRID;
 }
 
 export function getSpacing(): number {

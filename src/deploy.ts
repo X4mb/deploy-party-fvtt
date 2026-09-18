@@ -1,6 +1,7 @@
 import { FLAGS, MODULE_ID } from './constants.js';
 import { flags } from './foundryApi.js';
 import { createPartyTokenFromFolder } from './partyToken.js';
+import { findDeployedMembers } from './recall.js';
 import { collectActorsInFolder, spawnActorsAround } from './spawn.js';
 import { AFTER_DEPLOY_BEHAVIORS, getAfterDeployBehavior, getIncludeSubfolders, loc } from './settings.js';
 
@@ -43,6 +44,22 @@ export async function deployParty(tokenDoc: TokenDocument, options: DeployPartyO
     return;
   }
 
+  const alreadyDeployedIds = new Set(
+    findDeployedMembers(tokenDoc, scene)
+      .map((t) => t.actorId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const newActors = actors.filter((a) => !a.id || !alreadyDeployedIds.has(a.id));
+  if (!newActors.length) {
+    ui.notifications?.info(
+      loc(`${MODULE_ID}.notifications.allDeployed`, 'Everyone from "{name}" is already deployed.').replace(
+        '{name}',
+        folder.name,
+      ),
+    );
+    return;
+  }
+
   const grid = scene.grid as unknown as { size: number };
   const gridSize = grid.size;
   const center = {
@@ -51,7 +68,7 @@ export async function deployParty(tokenDoc: TokenDocument, options: DeployPartyO
   };
   const batchId = foundry.utils.randomID();
 
-  await spawnActorsAround(scene, actors, center, {
+  await spawnActorsAround(scene, newActors, center, {
     hidden: tokenDoc.hidden,
     extraFlags: () => ({
       [FLAGS.DEPLOY_BATCH_ID]: batchId,
@@ -64,7 +81,7 @@ export async function deployParty(tokenDoc: TokenDocument, options: DeployPartyO
 
   ui.notifications?.info(
     loc(`${MODULE_ID}.notifications.deployed`, 'Deployed {count} token(s) from "{name}".')
-      .replace('{count}', String(actors.length))
+      .replace('{count}', String(newActors.length))
       .replace('{name}', folder.name),
   );
 }

@@ -5,8 +5,10 @@
 ## What it does
 
 1. **Drag** an Actor folder from the sidebar onto the scene → a single **party marker** token appears.
-2. **Right-click** the marker → click **Deploy** in the Token HUD → every actor in that folder is placed as its own token, arranged around the marker.
+2. **Right-click** the marker → click **Deploy** in the Token HUD → every actor in that folder is placed as its own token, arranged around the marker in your chosen **Deploy layout** (grid, line, circle, or scatter).
 3. **Right-click** the marker or any deployed token → click **Recall** to remove the deployed tokens and bring the marker back (reusing it if it's still around, rebuilding it from the folder if not).
+
+Deploy is safe to click again on a marker that's already out: it only spawns actors from the folder that aren't currently deployed under that marker, so adding a new member to the folder and hitting Deploy again just tops up the party instead of duplicating everyone.
 
 Each actor uses its own prototype token, so vision, disposition, and size come out the way that actor is already configured — no system-specific code.
 
@@ -18,6 +20,7 @@ Prefer to skip the marker? Turn on **Deploy immediately on drop** and dragging a
 - **Shift+Drop: party marker should instead** — overrides the setting below for one Shift-held drop (default: hidden)
 - **Include subfolders when deploying**
 - **After deploying, the party marker should** — stay, hide, or delete (default: deleted)
+- **Deploy layout** — grid, line, circle, or scatter (default: grid)
 - **Deploy spacing** and **party marker size** (grid squares)
 - **Default party marker image**
 

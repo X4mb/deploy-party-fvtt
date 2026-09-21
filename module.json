@@ -1,8 +1,8 @@
 {
   "id": "deploy-party",
   "title": "Deploy Party",
-  "description": "<p><strong>Foundry v14+</strong>. Any game system. Drag a folder of actors from the Actors directory onto the canvas to create a single <strong>party token</strong>. Right-click that token to open the normal Token HUD, then click <strong>Deploy</strong> to drop every actor in the folder onto the scene as its own token, arranged around the party marker.</p><p>Works great for parties, monster groups, or any pile of tokens you keep organized in a folder and want to place quickly.</p><p><strong>Install:</strong> Setup → Add-on Modules → <em>Install Module</em> → <code>https://raw.githubusercontent.com/X4mb/deploy-party-fvtt/main/module.json</code></p>",
-  "version": "0.6.0",
+  "description": "<p>Drag a folder of actors onto the canvas to create a party marker, deploy it as individual tokens via the Token HUD, and recall them back into the marker when you're done. Any game system.</p>",
+  "version": "0.6.1",
   "authors": [{ "name": "X4mb", "url": "https://github.com/X4mb" }],
   "compatibility": {
     "minimum": "14",
